@@ -31,6 +31,53 @@ app.post("/addpassword", (req, res) => {
   );
 });
 
+app.post("/register", (req, res) => {
+  const { email, password } = req.body;
+  const hashedPassword = encrypt(password);
+  db.query(
+    "INSERT INTO accounts (email, password, iv) VALUES (?, ?, ?)",
+    [email, hashedPassword.password, hashedPassword.iv],
+    (err, result) => {
+      if (err) {
+        console.log(err);
+      } else {
+        res.send("Success");
+      }
+    }
+  );
+});
+
+app.post("/login", (req, res) => {
+  const { email, password } = req.body;
+  db.query(
+    "SELECT * FROM accounts WHERE email = ?",
+    [email],
+    (err, results) => {
+      if (err) {
+        console.log(err);
+        res.status(500).send("Server error");
+      } else {
+        if (results.length === 0) {
+          res.status(401).send("Email not found");
+        } else {
+          const storedPassword = results[0].password;
+          const storedIV = results[0].iv;
+          const decryptedPassword = decrypt({
+            password: storedPassword,
+            iv: storedIV,
+          });
+
+          if (password === decryptedPassword) {
+            res.send("Login successful!");
+          } else {
+            res.status(401).send("Invalid email or password");
+          }
+        }
+      }
+    }
+  );
+});
+
 app.get("/getpasswords", (req, res) => {
   db.query("SELECT * FROM passwords;", (err, result) => {
     if (err) {
