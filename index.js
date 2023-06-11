@@ -1,8 +1,9 @@
-const express = require("express");
-const app = express();
 const mysql = require("mysql2");
 const PORT = 3001;
 const cors = require("cors");
+const express = require("express");
+const app = express();
+const jsonwebtoken = require("jsonwebtoken");
 const db = mysql.createConnection({
   user: "root",
   host: "localhost",
@@ -11,24 +12,45 @@ const db = mysql.createConnection({
 });
 
 const { encrypt, decrypt } = require("./EncryptionHandler");
+const JWT_SECRET = "SMzab9*hebBm$R8$"
 
 app.use(cors());
 app.use(express.json());
 
+
 app.post("/addpassword", (req, res) => {
   const { password, title } = req.body;
   const hashedPassword = encrypt(password);
-  db.query(
-    "INSERT INTO passwords (password, title, iv) VALUES (?, ?, ?)",
-    [hashedPassword.password, title, hashedPassword.iv],
-    (err, result) => {
-      if (err) {
-        console.log(err);
-      } else {
-        res.send("Success");
-      }
+  const token = req.headers.authorization?.split(" ")[1];
+
+  // Verify and decode the token
+  try {
+    const decoded = jsonwebtoken.verify(token, JWT_SECRET);
+    const userEmail = decoded.user;
+
+    // Check if the user is authenticated
+    if (!userEmail) {
+      res.status(401).send("Unauthorized");
+      return;
+    }else{
+      console.log(userEmail)
     }
-  );
+
+    db.query(
+      "INSERT INTO passwords (password, title, iv, userEmail) VALUES (?, ?, ?, ?)",
+      [hashedPassword.password, title, hashedPassword.iv, userEmail],
+      (err, result) => {
+        if (err) {
+          console.log(err);
+          res.status(500).send("Server error");
+        } else {
+          res.send("Success");
+        }
+      }
+    );
+  } catch (error) {
+    res.status(401).send("Invalid token");
+  }
 });
 
 app.post("/register", (req, res) => {
@@ -68,7 +90,8 @@ app.post("/login", (req, res) => {
           });
 
           if (password === decryptedPassword) {
-            res.send("Login successful!");
+            const token = jsonwebtoken.sign({ user: email }, JWT_SECRET);
+            res.send({ success: true, token: token });
           } else {
             res.status(401).send("Invalid email or password");
           }
@@ -79,14 +102,34 @@ app.post("/login", (req, res) => {
 });
 
 app.get("/getpasswords", (req, res) => {
-  db.query("SELECT * FROM passwords;", (err, result) => {
-    if (err) {
-      console.log(err);
-    } else {
-      res.send(result);
+  const token = req.headers.authorization?.split(" ")[1];
+
+  // Verify and decode the token
+  try {
+    const decoded = jsonwebtoken.verify(token, JWT_SECRET);
+    const userEmail = decoded.user;
+
+    // Check if the user is authenticated
+    if (!userEmail) {
+      res.status(401).send("Unauthorized");
+      return;
+    }else{
+      console.log(userEmail)
     }
-  });
+
+    db.query("SELECT * FROM passwords WHERE userEmail = ?;", [userEmail], (err, result) => {
+      if (err) {
+        console.log(err);
+        res.status(500).send("Server error");
+      } else {
+        res.send(result);
+      }
+    });
+  } catch (error) {
+    res.status(401).send("Invalid token");
+  }
 });
+
 
 app.post("/decryptpassword", (req, res) => {
   res.send(decrypt(req.body));
