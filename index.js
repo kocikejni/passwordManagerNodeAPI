@@ -12,14 +12,13 @@ const db = mysql.createConnection({
 });
 
 const { encrypt, decrypt } = require("./EncryptionHandler");
-const JWT_SECRET = "SMzab9*hebBm$R8$"
+const JWT_SECRET = "SMzab9*hebBm$R8$";
 
 app.use(cors());
 app.use(express.json());
 
-
 app.post("/addpassword", (req, res) => {
-  const { password, title } = req.body;
+  const { password, title, email } = req.body;
   const hashedPassword = encrypt(password);
   const token = req.headers.authorization?.split(" ")[1];
 
@@ -32,19 +31,19 @@ app.post("/addpassword", (req, res) => {
     if (!userEmail) {
       res.status(401).send("Unauthorized");
       return;
-    }else{
-      console.log(userEmail)
+    } else {
+      console.log(userEmail);
     }
 
     db.query(
-      "INSERT INTO passwords (password, title, iv, userEmail) VALUES (?, ?, ?, ?)",
-      [hashedPassword.password, title, hashedPassword.iv, userEmail],
+      "INSERT INTO passwords (password, title, iv, userEmail, email) VALUES (?, ?, ?, ?, ?)",
+      [hashedPassword.password, title, hashedPassword.iv, userEmail, email],
       (err, result) => {
         if (err) {
           console.log(err);
           res.status(500).send("Server error");
         } else {
-          res.send("Success");
+          res.send({ success: true });
         }
       }
     );
@@ -76,7 +75,7 @@ app.post("/login", (req, res) => {
     [email],
     (err, results) => {
       if (err) {
-        console.log(err);
+        // console.log(err);
         res.status(500).send("Server error");
       } else {
         if (results.length === 0) {
@@ -90,7 +89,8 @@ app.post("/login", (req, res) => {
           });
 
           if (password === decryptedPassword) {
-            const token = jsonwebtoken.sign({ user: email }, JWT_SECRET);
+            const token = jsonwebtoken.sign({ user: email }, JWT_SECRET, { expiresIn: '1h' });
+
             res.send({ success: true, token: token });
           } else {
             res.status(401).send("Invalid email or password");
@@ -113,18 +113,78 @@ app.get("/getpasswords", (req, res) => {
     if (!userEmail) {
       res.status(401).send("Unauthorized");
       return;
-    }else{
-      console.log(userEmail)
+    } else {
+      console.log(userEmail);
     }
 
-    db.query("SELECT * FROM passwords WHERE userEmail = ?;", [userEmail], (err, result) => {
-      if (err) {
-        console.log(err);
-        res.status(500).send("Server error");
-      } else {
-        res.send(result);
+    db.query(
+      "SELECT * FROM passwords WHERE userEmail = ?;",
+      [userEmail],
+      (err, result) => {
+        if (err) {
+          console.log(err);
+          res.status(500).send("Server error");
+        } else {
+          const decryptedPasswords = result.map((password) => {
+            const decryptedPassword = decrypt({
+              password: password.password,
+              iv: password.iv,
+            });
+            return {
+              ...password,
+              password: decryptedPassword,
+            };
+          });
+          res.send(decryptedPasswords);
+        }
       }
-    });
+    );
+  } catch (error) {
+    res.status(401).send("Invalid token");
+  }
+});
+
+
+app.get("/getpassword/:id", (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+
+  // Verify and decode the token
+  try {
+    const decoded = jsonwebtoken.verify(token, JWT_SECRET);
+    const userEmail = decoded.user;
+
+    // Check if the user is authenticated
+    if (!userEmail) {
+      res.status(401).send("Unauthorized");
+      return;
+    }
+
+    const passwordId = req.params.id;
+
+    db.query(
+      "SELECT * FROM passwords WHERE id = ? AND userEmail = ?;",
+      [passwordId, userEmail],
+      (err, result) => {
+        if (err) {
+          console.log(err);
+          res.status(500).send("Server error");
+        } else {
+          if (result.length === 0) {
+            res.status(404).send("Password not found");
+          } else {
+            const decryptedPassword = decrypt({
+              password: result[0].password,
+              iv: result[0].iv,
+            });
+            const decryptedResult = {
+              ...result[0],
+              password: decryptedPassword,
+            };
+            res.send(decryptedResult);
+          }
+        }
+      }
+    );
   } catch (error) {
     res.status(401).send("Invalid token");
   }
