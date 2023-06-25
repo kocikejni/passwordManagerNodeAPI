@@ -22,12 +22,10 @@ app.post("/addpassword", (req, res) => {
   const hashedPassword = encrypt(password);
   const token = req.headers.authorization?.split(" ")[1];
 
-  // Verify and decode the token
   try {
     const decoded = jsonwebtoken.verify(token, JWT_SECRET);
     const userEmail = decoded.user;
 
-    // Check if the user is authenticated
     if (!userEmail) {
       res.status(401).send("Unauthorized");
       return;
@@ -42,6 +40,78 @@ app.post("/addpassword", (req, res) => {
         if (err) {
           console.log(err);
           res.status(500).send("Server error");
+        } else {
+          res.send({ success: true });
+        }
+      }
+    );
+  } catch (error) {
+    res.status(401).send("Invalid token");
+  }
+});
+
+app.put("/updatepassword", (req, res) => {
+  const { password, title, email, id } = req.body; 
+  const hashedPassword = encrypt(password);
+  const token = req.headers.authorization?.split(" ")[1];
+
+  try {
+    const decoded = jsonwebtoken.verify(token, JWT_SECRET);
+    const userEmail = decoded.user;
+
+    if (!userEmail) {
+      res.status(401).send("Unauthorized");
+      return;
+    } else {
+      console.log(userEmail);
+    }
+
+    db.query(
+      "UPDATE passwords SET password = ?, title = ?, email = ? WHERE id = ? AND userEmail = ?",
+      [hashedPassword.password, title, email, id, userEmail], 
+      (err, result) => {
+        if (err) {
+          console.log(err);
+          res.status(500).send("Server error");
+        } else {
+          if (result.affectedRows === 0) {
+            res.status(404).send("Password not found");
+          } else {
+            res.send({ success: true });
+          }
+        }
+      }
+    );
+  } catch (error) {
+    res.status(401).send("Invalid token");
+  }
+});
+
+
+app.delete("/deletepassword", (req, res) => {
+  const { id, email } = req.body;
+  const token = req.headers.authorization?.split(" ")[1];
+
+  try {
+    const decoded = jsonwebtoken.verify(token, JWT_SECRET);
+    const userEmail = decoded.user;
+
+    if (!userEmail) {
+      res.status(401).send("Unauthorized");
+      return;
+    } else {
+      console.log(userEmail);
+    }
+
+    db.query(
+      "DELETE FROM passwords WHERE id = ? AND userEmail = ? AND email = ?",
+      [id, userEmail, email],
+      (err, result) => {
+        if (err) {
+          console.log(err);
+          res.status(500).send("Server error");
+        } else if (result.affectedRows === 0) {
+          res.status(404).send("Password not found");
         } else {
           res.send({ success: true });
         }
@@ -75,7 +145,6 @@ app.post("/login", (req, res) => {
     [email],
     (err, results) => {
       if (err) {
-        // console.log(err);
         res.status(500).send("Server error");
       } else {
         if (results.length === 0) {
@@ -89,7 +158,9 @@ app.post("/login", (req, res) => {
           });
 
           if (password === decryptedPassword) {
-            const token = jsonwebtoken.sign({ user: email }, JWT_SECRET, { expiresIn: '1h' });
+            const token = jsonwebtoken.sign({ user: email }, JWT_SECRET, {
+              expiresIn: "1h",
+            });
 
             res.send({ success: true, token: token });
           } else {
@@ -101,15 +172,33 @@ app.post("/login", (req, res) => {
   );
 });
 
+const invalidatedTokens = [];
+
+app.post("/logout", (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+
+  if (!token) {
+    res.status(401).send("Unauthorized");
+    return;
+  }
+
+  if (invalidatedTokens.includes(token)) {
+    res.status(401).send("Token has already been invalidated");
+    return;
+  }
+
+  invalidatedTokens.push(token);
+
+  res.send({ success: true });
+});
+
 app.get("/getpasswords", (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
 
-  // Verify and decode the token
   try {
     const decoded = jsonwebtoken.verify(token, JWT_SECRET);
     const userEmail = decoded.user;
 
-    // Check if the user is authenticated
     if (!userEmail) {
       res.status(401).send("Unauthorized");
       return;
@@ -144,16 +233,13 @@ app.get("/getpasswords", (req, res) => {
   }
 });
 
-
 app.get("/getpassword/:id", (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
 
-  // Verify and decode the token
   try {
     const decoded = jsonwebtoken.verify(token, JWT_SECRET);
     const userEmail = decoded.user;
 
-    // Check if the user is authenticated
     if (!userEmail) {
       res.status(401).send("Unauthorized");
       return;
@@ -189,7 +275,6 @@ app.get("/getpassword/:id", (req, res) => {
     res.status(401).send("Invalid token");
   }
 });
-
 
 app.post("/decryptpassword", (req, res) => {
   res.send(decrypt(req.body));
