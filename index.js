@@ -13,7 +13,7 @@ const db = mysql.createConnection({
 
 const { encrypt, decrypt } = require("./EncryptionHandler");
 const JWT_SECRET = "SMzab9*hebBm$R8$";
-
+const invalidatedTokens = [];
 app.use(cors());
 app.use(express.json());
 
@@ -28,6 +28,10 @@ app.post("/addpassword", (req, res) => {
 
     if (!userEmail) {
       res.status(401).send("Unauthorized");
+      return;
+    }
+    if (invalidatedTokens.includes(token)) {
+      res.status(401).send("Token has already been invalidated");
       return;
     } else {
       console.log(userEmail);
@@ -51,7 +55,7 @@ app.post("/addpassword", (req, res) => {
 });
 
 app.put("/updatepassword", (req, res) => {
-  const { password, title, email, id } = req.body; 
+  const { password, title, email, id } = req.body;
   const hashedPassword = encrypt(password);
   const token = req.headers.authorization?.split(" ")[1];
 
@@ -62,13 +66,17 @@ app.put("/updatepassword", (req, res) => {
     if (!userEmail) {
       res.status(401).send("Unauthorized");
       return;
+    }
+    if (invalidatedTokens.includes(token)) {
+      res.status(401).send("Token has already been invalidated");
+      return;
     } else {
       console.log(userEmail);
     }
 
     db.query(
       "UPDATE passwords SET password = ?, title = ?, email = ? WHERE id = ? AND userEmail = ?",
-      [hashedPassword.password, title, email, id, userEmail], 
+      [hashedPassword.password, title, email, id, userEmail],
       (err, result) => {
         if (err) {
           console.log(err);
@@ -87,7 +95,6 @@ app.put("/updatepassword", (req, res) => {
   }
 });
 
-
 app.delete("/deletepassword", (req, res) => {
   const { id, email } = req.body;
   const token = req.headers.authorization?.split(" ")[1];
@@ -98,6 +105,10 @@ app.delete("/deletepassword", (req, res) => {
 
     if (!userEmail) {
       res.status(401).send("Unauthorized");
+      return;
+    }
+    if (invalidatedTokens.includes(token)) {
+      res.status(401).send("Token has already been invalidated");
       return;
     } else {
       console.log(userEmail);
@@ -172,8 +183,6 @@ app.post("/login", (req, res) => {
   );
 });
 
-const invalidatedTokens = [];
-
 app.post("/logout", (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
 
@@ -201,6 +210,10 @@ app.get("/getpasswords", (req, res) => {
 
     if (!userEmail) {
       res.status(401).send("Unauthorized");
+      return;
+    }
+    if (invalidatedTokens.includes(token)) {
+      res.status(401).send("Token has already been invalidated");
       return;
     } else {
       console.log(userEmail);
@@ -242,6 +255,10 @@ app.get("/getpassword/:id", (req, res) => {
 
     if (!userEmail) {
       res.status(401).send("Unauthorized");
+      return;
+    }
+    if (invalidatedTokens.includes(token)) {
+      res.status(401).send("Token has already been invalidated");
       return;
     }
 
