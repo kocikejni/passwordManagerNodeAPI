@@ -7,7 +7,7 @@ const jsonwebtoken = require("jsonwebtoken");
 const db = mysql.createConnection({
   user: "root",
   host: "localhost",
-  password: "notMyRealPassword",
+  password: "Android_50th",
   database: "passwordmanager",
 });
 
